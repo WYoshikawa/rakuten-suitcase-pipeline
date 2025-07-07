@@ -1,0 +1,34 @@
+name: Daily Rakuten Rank CSV
+
+on:
+  schedule:
+    - cron: '0 2 * * *'   # 毎日 11:00 JST
+  workflow_dispatch:      # 手動トリガ用ボタン
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run ranking script (Top 1000)
+        env:
+          APP_ID: ${{ secrets.APP_ID }}
+        run: python rakuten_rank_step1.py --pages 10
+
+      - name: Upload CSV to Google Drive
+        uses: gdrive-upload/action@v1
+        with:
+          service_account_key: ${{ secrets.GDRIVE_JSON }}
+          folder_id:          ${{ secrets.GDRIVE_FOLDER }}
+          file_path:          rank_base_${{ github.run_id }}.csv
+          overwrite:          "true"
