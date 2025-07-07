@@ -1,5 +1,4 @@
 name: Daily Rakuten Rank CSV
-
 on:
   # ───────── 自動実行 ─────────
   schedule:
@@ -11,33 +10,31 @@ on:
 jobs:
   run:
     runs-on: ubuntu-latest
-
     steps:
       # ❶ リポジトリ取得
       - uses: actions/checkout@v4
-
+      
       # ❷ Python セットアップ
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-
+      
       # ❸ 依存ライブラリをインストール
       - name: Install dependencies
-        run: pip install -r requirements.txt
-
+        run: |
+          pip install -r requirements.txt
+          pip install google-auth google-auth-oauthlib google-auth-httplib2 google-api-python-client
+      
       # ❹ ランキング CSV 生成 (Top 1000)
       - name: Run ranking script
         env:
           APP_ID: ${{ secrets.APP_ID }}
         run: python rakuten_rank_step1.py --pages 10
-
-      # ❺ Google Drive へアップロード（上書き）
+      
+      # ❺ Google Drive へアップロード（Pythonスクリプト使用）
       - name: Upload CSV to Google Drive
-        uses: wzieba/google-drive-action@v1.0.4
-        with:
-          service_account_key: ${{ secrets.GDRIVE_JSON }}
-          folder_id:           ${{ secrets.GDRIVE_FOLDER }}
-          file_path:           rank_base_${{ github.run_id }}.csv
-          name:                rank_base_daily.csv
-          overwrite:           true
+        env:
+          GDRIVE_JSON: ${{ secrets.GDRIVE_JSON }}
+          GDRIVE_FOLDER: ${{ secrets.GDRIVE_FOLDER }}
+        run: python upload_to_drive.py
