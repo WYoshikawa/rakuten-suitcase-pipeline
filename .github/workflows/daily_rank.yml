@@ -34,10 +34,10 @@ jobs:
 
       # ❺ Google Drive へアップロード（上書き）
       - name: Upload CSV to Google Drive
-        uses: google-github-actions/upload-files-to-drive@v1
+        uses: wzieba/google-drive-action@v1.0.4
         with:
-          credentials_json:  ${{ secrets.GDRIVE_JSON }}
-          parent_id:         ${{ secrets.GDRIVE_FOLDER }}
-          source:            rank_base_${{ github.run_id }}.csv    # ローカルのファイル
-          name:              rank_base_daily.csv                   # Drive 上のファイル名
-          overwrite:         true
+          service_account_key: ${{ secrets.GDRIVE_JSON }}
+          folder_id:           ${{ secrets.GDRIVE_FOLDER }}
+          file_path:           rank_base_${{ github.run_id }}.csv
+          name:                rank_base_daily.csv
+          overwrite:           true
