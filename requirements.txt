@@ -1,0 +1,8 @@
+streamlit
+pandas
+requests
+requests-cache
+beautifulsoup4
+fugashi[unidic-lite]
+tqdm
+python-dotenv
