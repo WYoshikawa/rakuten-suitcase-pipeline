@@ -1,34 +1,43 @@
 name: Daily Rakuten Rank CSV
 
 on:
+  # ───────── 自動実行 ─────────
   schedule:
-    - cron: '0 2 * * *'   # 毎日 11:00 JST
-  workflow_dispatch:      # 手動トリガ用ボタン
+    # 0 2 * * *  = UTC 02:00 → 日本時間 11:00
+    - cron: '0 2 * * *'
+  # ───────── 手動実行 ─────────
+  workflow_dispatch:
 
 jobs:
   run:
     runs-on: ubuntu-latest
 
     steps:
+      # ❶ リポジトリ取得
       - uses: actions/checkout@v4
 
+      # ❷ Python セットアップ
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
+      # ❸ 依存ライブラリをインストール
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Run ranking script (Top 1000)
+      # ❹ ランキング CSV 生成 (Top 1000)
+      - name: Run ranking script
         env:
           APP_ID: ${{ secrets.APP_ID }}
         run: python rakuten_rank_step1.py --pages 10
 
+      # ❺ Google Drive へアップロード（上書き）
       - name: Upload CSV to Google Drive
-        uses: gdrive-upload/action@v1
+        uses: wzieba/gh-action-google-drive-upload@v1.3.3
         with:
           service_account_key: ${{ secrets.GDRIVE_JSON }}
           folder_id:          ${{ secrets.GDRIVE_FOLDER }}
-          file_path:          rank_base_${{ github.run_id }}.csv
-          overwrite:          "true"
+          file_path:          rank_base_${{ github.run_id }}.csv   # ローカルの生成ファイル名
+          name:               rank_base_daily.csv                  # Drive 上での保存名
+          overwrite:          true
