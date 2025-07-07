@@ -34,7 +34,7 @@ jobs:
 
       # ❺ Google Drive へアップロード（上書き）
       - name: Upload CSV to Google Drive
-        uses: wzieba/gh-action-google-drive-upload@v1.3.3
+        uses: wzieba/ghaction-google-drive-upload@v1
         with:
           service_account_key: ${{ secrets.GDRIVE_JSON }}
           folder_id:          ${{ secrets.GDRIVE_FOLDER }}
