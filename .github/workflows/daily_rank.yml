@@ -58,6 +58,11 @@ jobs:
           echo "🔍 ランキング変化を分析中..."
           python analyze_changes.py || echo "変化分析をスキップ（初回実行または比較データなし）"
       
+      - name: Debug changes detection
+        run: |
+          echo "🔧 変化検出をデバッグ中..."
+          python debug_changes.py
+      
       - name: Commit and push changes
         run: |
           git config --local user.email "action@github.com"
