@@ -5,23 +5,31 @@ import glob
 import os
 
 def analyze_ranking_changes():
-    """前回との変化を分析"""
+    """前回との変化を分析（修正版）"""
     
-    # 最新の2つのCSVファイルを取得
-    csv_files = sorted(glob.glob('data/rank_base_*.csv'))
+    # 日付付きCSVファイルのみを取得（latest.csvは除外）
+    csv_files = sorted([f for f in glob.glob('data/rank_base_*.csv') 
+                       if 'latest' not in f])
+    
+    print(f"日付付きCSVファイル: {csv_files}")
+    
     if len(csv_files) < 2:
         print("比較するデータが不足しています")
         return
     
     # 前回と今回のデータを読み込み
-    previous_file = csv_files[-2]  # 前回
-    current_file = csv_files[-1]   # 今回
+    previous_file = csv_files[-2]  # 前回（昨日）
+    current_file = csv_files[-1]   # 今回（今日）
     
     print(f"比較: {previous_file} → {current_file}")
     
     try:
         df_prev = pd.read_csv(previous_file)
         df_curr = pd.read_csv(current_file)
+        
+        print(f"前回データ: {len(df_prev)}件")
+        print(f"今回データ: {len(df_curr)}件")
+        
     except Exception as e:
         print(f"CSVファイル読み込みエラー: {e}")
         return
@@ -38,6 +46,8 @@ def analyze_ranking_changes():
     
     # 新規ランクイン
     new_items = comparison[comparison['rank_prev'].isna()]
+    print(f"新規ランクイン: {len(new_items)}件")
+    
     for _, item in new_items.iterrows():
         if pd.notna(item['rank_now']):
             changes['changes'].append({
@@ -50,6 +60,8 @@ def analyze_ranking_changes():
     
     # ランキングアウト
     dropped_items = comparison[comparison['rank_now'].isna()]
+    print(f"ランキングアウト: {len(dropped_items)}件")
+    
     for _, item in dropped_items.iterrows():
         if pd.notna(item['rank_prev']):
             changes['changes'].append({
@@ -59,11 +71,13 @@ def analyze_ranking_changes():
                 'price': item['itemPrice_prev']
             })
     
-    # 順位変動
+    # 順位変動（しきい値を3位に下げる）
     stable_items = comparison.dropna(subset=['rank_now', 'rank_prev'])
+    print(f"継続商品: {len(stable_items)}件")
+    
     for _, item in stable_items.iterrows():
         rank_change = int(item['rank_prev']) - int(item['rank_now'])  # 正数=上昇
-        if abs(rank_change) >= 5:  # 5位以上の変動のみ
+        if abs(rank_change) >= 3:  # 3位以上の変動
             change_type = "📈 急上昇" if rank_change > 0 else "📉 急下降"
             changes['changes'].append({
                 'type': change_type,
@@ -75,11 +89,11 @@ def analyze_ranking_changes():
                 'url': item['itemUrl_now']
             })
     
-    # 価格変動（10%以上）
+    # 価格変動（5%以上に下げる）
     for _, item in stable_items.iterrows():
         if pd.notna(item['itemPrice_now']) and pd.notna(item['itemPrice_prev']):
             price_change = (item['itemPrice_now'] - item['itemPrice_prev']) / item['itemPrice_prev'] * 100
-            if abs(price_change) >= 10:
+            if abs(price_change) >= 5:  # 5%以上の変動
                 change_type = "💰 値上がり" if price_change > 0 else "💸 値下がり"
                 changes['changes'].append({
                     'type': change_type,
