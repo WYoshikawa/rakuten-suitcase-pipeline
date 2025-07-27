@@ -1,0 +1,38 @@
+{
+  "timestamp": "2025-07-27T01:39:47.483656",
+  "previous_file": "rank_base_2025-07-27.csv",
+  "current_file": "rank_base_latest.csv",
+  "summary": {
+    "analysis_date": "2025-07-27T01:39:47.416140",
+    "total_items_today": 300,
+    "total_items_yesterday": 300,
+    "avg_price_today": 16400.0,
+    "avg_price_yesterday": 16400.0,
+    "avg_price_change_percent": 0.0,
+    "new_entries_count": 0,
+    "dropped_entries_count": 0,
+    "price_changes_count": 0,
+    "total_changes_detected": 0
+  },
+  "keyword_trends": {
+    "lightweight": 71.7,
+    "carry_on": 56.3,
+    "front_open": 26.7,
+    "usb": 26.7,
+    "silent": 36.7,
+    "coupon": 53.7,
+    "ranking_1st": 14.3
+  },
+  "changes": {
+    "critical": [],
+    "important": [],
+    "notable": []
+  },
+  "statistics": {
+    "total_changes_analyzed": 0,
+    "critical_changes": 0,
+    "important_changes": 0,
+    "notable_changes": 0,
+    "compression_ratio": "100.0%"
+  }
+}
