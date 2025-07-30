@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
 """
-rakuten_rank_step1.py (Enhanced Version)
+🦝 RASCAL 3.0対応 rakuten_rank_step1.py【画像URL取得版】
 -----------------------------------
 ▸ 楽天 Item Ranking API (スーツケース: genreId=301577) から上位 1000 件取得
-▸ itemPrice / reviewAverage / reviewCount を含む CSV を出力
+▸ itemPrice / reviewAverage / reviewCount / 画像URL を含む CSV を出力
 ▸ 商品名キーワードで詳細機能フラグ付与（15種類の機能検出）
+▸ 🆕 画像URL取得機能追加（RASCAL 3.0 画像分析対応）
+
 使い方:
     1. .env に APP_ID=your_application_id を設定
     2. pip install requests pandas tqdm python-dotenv
-    3. python rakuten_rank_step1.py --pages 10
+    3. python rakuten_rank_step1.py --pages 10 --with-images
 """
 import os, time, argparse, re
 from datetime import date
@@ -22,7 +24,7 @@ if not APP_ID:
     raise RuntimeError("APP_ID missing (.env or export APP_ID=xxxx)")
 
 GENRE_ID  = 301577
-HEADERS   = {"User-Agent": "Mozilla/5.0"}
+HEADERS   = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"}
 
 # ========== 機能検出用正規表現パターン ==========
 
@@ -84,6 +86,7 @@ FUNCTION_APPEAL_RE = re.compile(r"超軽量|多機能|高機能|最新|特許|�
 URGENCY_APPEAL_RE = re.compile(r"限定|先着|24H限定|今だけ|再入荷|在庫限り|期間限定", re.I)
 
 def rank_url(page):
+    """楽天ランキングAPI URL生成"""
     return (f"https://app.rakuten.co.jp/services/api/IchibaItem/Ranking/20220601"
             f"?applicationId={APP_ID}&format=json&genreId={GENRE_ID}&page={page}")
 
@@ -144,54 +147,173 @@ def analyze_features(name):
         "appeal_urgency": bool(URGENCY_APPEAL_RE.search(name)),
     }
 
-def fetch(pages):
+def extract_image_url(item, image_size="medium"):
+    """🎨 商品画像URL抽出（RASCAL 3.0対応）"""
+    try:
+        # 画像サイズ別URL取得
+        if image_size == "medium" and "mediumImageUrls" in item:
+            image_urls = item["mediumImageUrls"]
+            if image_urls and len(image_urls) > 0:
+                return image_urls[0]["imageUrl"]
+        
+        elif image_size == "small" and "smallImageUrls" in item:
+            image_urls = item["smallImageUrls"]
+            if image_urls and len(image_urls) > 0:
+                return image_urls[0]["imageUrl"]
+        
+        # フォールバック: mediumImageUrl（単一）
+        if "mediumImageUrl" in item and item["mediumImageUrl"]:
+            return item["mediumImageUrl"]
+        
+        # フォールバック: smallImageUrl（単一）  
+        if "smallImageUrl" in item and item["smallImageUrl"]:
+            return item["smallImageUrl"]
+        
+        # 最終フォールバック: itemUrl（商品ページ）
+        return item.get("itemUrl", "")
+        
+    except Exception as e:
+        print(f"画像URL抽出エラー: {e}")
+        return ""
+
+def fetch(pages, with_images=False):
+    """楽天ランキングデータ取得"""
     rows = []
-    for p in tqdm(range(1, pages+1), desc="fetch pages"):
-        js = requests.get(rank_url(p), headers=HEADERS, timeout=15).json()
-        for it in js.get("Items", []):
-            item = it["Item"]
-            name = item["itemName"]
+    print(f"🚀 楽天スーツケースランキング取得開始 (上位{pages * 100}件)")
+    if with_images:
+        print("🎨 画像URL取得機能: 有効")
+    
+    for p in tqdm(range(1, pages+1), desc="📡 データ取得中"):
+        try:
+            response = requests.get(rank_url(p), headers=HEADERS, timeout=15)
+            response.raise_for_status()
+            js = response.json()
             
-            # 基本データ
-            row_data = {
-                "rank": item["rank"],
-                "itemCode": item["itemCode"],
-                "itemName": name,
-                "itemPrice": item["itemPrice"],
-                "reviewAverage": item["reviewAverage"],
-                "reviewCount": item["reviewCount"],
-                "itemUrl": item["itemUrl"],  # URL も追加
-            }
+            for it in js.get("Items", []):
+                item = it["Item"]
+                name = item["itemName"]
+                
+                # 基本データ
+                row_data = {
+                    "rank": item["rank"],
+                    "itemCode": item["itemCode"],
+                    "itemName": name,
+                    "itemPrice": item["itemPrice"],
+                    "reviewAverage": item["reviewAverage"],
+                    "reviewCount": item["reviewCount"],
+                    "itemUrl": item["itemUrl"],
+                }
+                
+                # 🎨 画像URL追加（RASCAL 3.0対応）
+                if with_images:
+                    row_data["imageUrl"] = extract_image_url(item, "medium")
+                    # 念のため小さいサイズも取得
+                    row_data["smallImageUrl"] = extract_image_url(item, "small")
+                
+                # 機能フラグを追加
+                row_data.update(analyze_features(name))
+                rows.append(row_data)
+                
+        except requests.exceptions.RequestException as e:
+            print(f"❌ API取得エラー (page {p}): {e}")
+            continue
+        except Exception as e:
+            print(f"❌ データ処理エラー (page {p}): {e}")
+            continue
             
-            # 機能フラグを追加
-            row_data.update(analyze_features(name))
-            rows.append(row_data)
-            
+        # API負荷軽減
         time.sleep(1)
+    
     return pd.DataFrame(rows)
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--pages", type=int, default=10, help="Ranking pages (max 10)")
-    args = parser.parse_args()
-    
-    print(f"🚀 楽天スーツケースランキング取得開始 (上位{args.pages * 100}件)")
-    df = fetch(args.pages)
-    
-    # 機能統計を表示
+def display_statistics(df, with_images=False):
+    """統計情報表示"""
     print(f"\n📊 機能別統計 (全{len(df)}件)")
     print("=" * 50)
     
-    feature_cols = [col for col in df.columns if col.startswith(('has_', 'is_'))]
+    # 機能統計
+    feature_cols = [col for col in df.columns if col.startswith(('has_', 'is_', 'for_', 'appeal_'))]
     for col in feature_cols:
-        count = df[col].sum()
+        count = df[col].sum() if df[col].dtype == bool else (df[col] == True).sum()
         percentage = (count / len(df)) * 100
-        feature_name = col.replace('has_', '').replace('is_', '')
+        feature_name = col.replace('has_', '').replace('is_', '').replace('for_', '').replace('appeal_', '')
         print(f"{feature_name:15}: {count:3d}件 ({percentage:5.1f}%)")
     
+    # 🎨 画像URL統計（RASCAL 3.0対応）
+    if with_images:
+        print(f"\n🎨 画像URL取得統計")
+        print("=" * 30)
+        if 'imageUrl' in df.columns:
+            valid_images = df['imageUrl'].notna().sum()
+            valid_percentage = (valid_images / len(df)) * 100
+            print(f"画像URL取得成功: {valid_images}件 ({valid_percentage:.1f}%)")
+            
+            # 画像URL例
+            sample_images = df[df['imageUrl'].notna()]['imageUrl'].head(3)
+            print(f"画像URL例:")
+            for i, url in enumerate(sample_images, 1):
+                print(f"  {i}. {url[:80]}...")
+        else:
+            print("画像URL取得: 無効")
+
+def save_data(df, with_images=False):
+    """データ保存"""
+    # ファイル名生成
+    base_name = f"rank_base_{date.today()}"
+    if with_images:
+        out = f"{base_name}_with_images.csv"
+    else:
+        out = f"{base_name}.csv"
+    
     # CSV保存
-    out = f"rank_base_{date.today()}.csv"
-    df.to_csv(out, index=False)
+    df.to_csv(out, index=False, encoding='utf-8')
+    
     print(f"\n✅ 保存完了: {out}")
     print(f"📈 取得件数: {len(df)}件")
+    
+    # 列数表示
+    feature_cols = [col for col in df.columns if col.startswith(('has_', 'is_', 'for_', 'appeal_'))]
     print(f"🏷️  機能フラグ: {len(feature_cols)}種類")
+    
+    if with_images and 'imageUrl' in df.columns:
+        valid_images = df['imageUrl'].notna().sum()
+        print(f"🎨 画像URL: {valid_images}件取得")
+        
+        # RASCAL 3.0 分析準備完了メッセージ
+        if valid_images > 0:
+            print(f"\n🦝 RASCAL 3.0 画像分析準備完了！")
+            print(f"次のコマンドで画像分析を実行:")
+            print(f"python rascal_3_0_image_analysis.py {out}")
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="🦝 RASCAL楽天ランキング取得システム")
+    parser.add_argument("--pages", type=int, default=10, help="取得ページ数 (最大10)")
+    parser.add_argument("--with-images", action="store_true", help="🎨 画像URL取得（RASCAL 3.0対応）")
+    args = parser.parse_args()
+    
+    print("🦝" + "="*50)
+    print("🦝 RASCAL楽天スーツケースランキング取得システム")
+    if args.with_images:
+        print("🦝 RASCAL 3.0 画像分析対応版")
+    print("🦝" + "="*50)
+    
+    # データ取得
+    df = fetch(args.pages, args.with_images)
+    
+    if len(df) == 0:
+        print("❌ データ取得に失敗しました")
+        exit(1)
+    
+    # 統計表示
+    display_statistics(df, args.with_images)
+    
+    # データ保存
+    save_data(df, args.with_images)
+    
+    # RASCAL 3.0 画像分析推奨
+    if args.with_images and 'imageUrl' in df.columns and df['imageUrl'].notna().sum() > 0:
+        print(f"\n🦝 RASCAL 3.0 画像分析機能が利用可能です！")
+        print(f"🎨 色彩分析、デザイン分類、高級感評価、整合性チェック")
+        print(f"💎 市場の真実を画像データで解明しましょう！")
+    
+    print(f"\n🦝 データ取得完了！RASCAL分析をお楽しみください！")
