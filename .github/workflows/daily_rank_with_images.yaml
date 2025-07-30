@@ -1,0 +1,135 @@
+name: Daily Rakuten Rank CSV with Image Analysis
+on:
+  schedule:
+    # 毎日1回（日本時間 朝9時）
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+    inputs:
+      enable_images:
+        description: '画像分析を有効にする'
+        required: false
+        default: 'true'
+        type: boolean
+      pages:
+        description: '取得ページ数'
+        required: false
+        default: '10'
+        type: string
+
+# GitHub Actions に書き込み権限を付与
+permissions:
+  contents: write
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgl1-mesa-glx libglib2.0-0 libsm6 libxext6 libxrender-dev libgomp1
+      
+      - name: Install Python dependencies
+        run: |
+          pip install -r requirements_with_images.txt
+          pip install pandas numpy pillow opencv-python scikit-learn matplotlib
+      
+      - name: Run ranking script with images
+        env:
+          APP_ID: ${{ secrets.APP_ID }}
+        run: |
+          if [ "${{ github.event.inputs.enable_images }}" = "true" ] || [ "${{ github.event_name }}" = "schedule" ]; then
+            echo "🎨 画像分析有効でランキング取得開始"
+            python rakuten_rank_step1.py --pages ${{ github.event.inputs.pages || '10' }} --with-images
+          else
+            echo "📊 通常モードでランキング取得開始"
+            python rakuten_rank_step1.py --pages ${{ github.event.inputs.pages || '10' }}
+          fi
+      
+      - name: Run image analysis (if images available)
+        run: |
+          echo "🎨 画像分析実行中..."
+          python rascal_image_analyzer.py || echo "画像分析をスキップ（画像データなしまたはエラー）"
+      
+      - name: Organize CSV files
+        run: |
+          # dataフォルダを作成
+          mkdir -p data
+          mkdir -p data/images
+          
+          # 日本時間でタイムスタンプ取得
+          DATE=$(TZ='Asia/Tokyo' date +%Y-%m-%d)
+          TIME=$(TZ='Asia/Tokyo' date +%H-%M)
+          
+          # 生成されたCSVファイルを確認
+          echo "Generated CSV files:"
+          ls -la rank_base_*.csv
+          
+          # タイムスタンプ付きで保存
+          if ls rank_base_*_with_images.csv 1> /dev/null 2>&1; then
+            cp rank_base_*_with_images.csv data/rank_base_${DATE}_with_images.csv
+            cp rank_base_*_with_images.csv data/rank_base_latest_with_images.csv
+            echo "画像付きCSVファイルを保存しました"
+          elif ls rank_base_*.csv 1> /dev/null 2>&1; then
+            cp rank_base_*.csv data/rank_base_${DATE}.csv
+            cp rank_base_*.csv data/rank_base_latest.csv
+            echo "通常CSVファイルを保存しました"
+          else
+            echo "No CSV files found!"
+            exit 1
+          fi
+          
+          # 画像分析結果があれば保存
+          if ls image_analysis_*.json 1> /dev/null 2>&1; then
+            cp image_analysis_*.json data/images/
+            echo "画像分析結果を保存しました"
+          fi
+      
+      - name: Analyze ranking changes
+        run: |
+          echo "🔍 ランキング変化を分析中..."
+          python analyze_changes_with_images.py || echo "変化分析をスキップ（初回実行または比較データなし）"
+      
+      - name: Upload to Google Drive (Optional)
+        env:
+          GDRIVE_JSON: ${{ secrets.GDRIVE_JSON }}
+          GDRIVE_FOLDER: ${{ secrets.GDRIVE_FOLDER }}
+        run: |
+          if [ -n "$GDRIVE_JSON" ] && [ -n "$GDRIVE_FOLDER" ]; then
+            echo "📤 Google Driveにアップロード中..."
+            python upload_to_drive_with_images.py || echo "Google Driveアップロードをスキップ"
+          else
+            echo "Google Drive設定なし、ローカル保存のみ"
+          fi
+      
+      - name: Generate analysis report
+        run: |
+          echo "📊 RASCAL分析レポート生成中..."
+          python generate_rascal_report.py || echo "レポート生成をスキップ"
+      
+      - name: Commit and push changes
+        run: |
+          git config --local user.email "rascal@github.com"
+          git config --local user.name "RASCAL 3.0 Bot"
+          git add data/
+          
+          # 変更があるかチェック
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            # 画像分析があったかチェック
+            if ls data/images/*.json 1> /dev/null 2>&1; then
+              git commit -m "🎨 Daily ranking update with image analysis $(TZ='Asia/Tokyo' date +%Y-%m-%d)"
+            else
+              git commit -m "📊 Daily ranking update $(TZ='Asia/Tokyo' date +%Y-%m-%d)"
+            fi
+            git push https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
+            echo "Data updated and pushed successfully"
+          fi
