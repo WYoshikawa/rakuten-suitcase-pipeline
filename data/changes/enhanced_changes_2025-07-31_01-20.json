@@ -1,0 +1,26 @@
+{
+  "timestamp": "2025-07-31T01:20:21.006546",
+  "analysis_type": "basic",
+  "source_files": {
+    "current": "rank_base_latest_with_images.csv",
+    "previous": "rank_base_latest.csv"
+  },
+  "basic_analysis": {
+    "price_analysis": {
+      "today_average": 23303.0,
+      "yesterday_average": 23679.0,
+      "change_percent": -1.6
+    },
+    "market_dynamics": {
+      "new_entries": 165,
+      "dropped_items": 165,
+      "continuing_items": 135,
+      "turnover_rate": 110.0
+    }
+  },
+  "enhanced_analysis": null,
+  "summary": {
+    "market_trend": "平均価格-1.6%変動",
+    "market_fluidity": "商品入れ替わり率110.0%"
+  }
+}
