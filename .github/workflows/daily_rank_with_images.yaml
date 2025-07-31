@@ -40,7 +40,7 @@ jobs:
           APP_ID: ${{ secrets.APP_ID }}
         run: |
           echo "🦝 RASCAL TOP100 データ取得開始"
-          python rakuten_rank_top100.py
+          python rakuten_rank_step1.py --pages 1
           echo "✅ TOP100データ取得完了"
       
       - name: Run comprehensive analysis
