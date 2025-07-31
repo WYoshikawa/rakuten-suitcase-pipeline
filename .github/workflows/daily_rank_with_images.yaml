@@ -1,27 +1,25 @@
-name: Daily Rakuten Rank with Image Analysis (Fixed)
+name: Daily Rakuten TOP100 Analysis
 on:
   schedule:
     # 毎日1回（日本時間 朝9時）
     - cron: '0 0 * * *'
   workflow_dispatch:
     inputs:
-      enable_images:
-        description: '画像分析を有効にする'
+      analysis_mode:
+        description: '分析モード'
         required: false
-        default: 'true'
-        type: boolean
-      pages:
-        description: '取得ページ数'
-        required: false
-        default: '10'
-        type: string
+        default: 'full'
+        type: choice
+        options:
+        - 'full'
+        - 'basic'
 
 # GitHub Actions に書き込み権限を付与
 permissions:
   contents: write
 
 jobs:
-  run:
+  analyze:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -31,112 +29,116 @@ jobs:
         with:
           python-version: '3.11'
       
-      - name: Install system dependencies (Fixed)
-        run: |
-          sudo apt-get update
-          # 画像処理用システム依存関係（エラー回避版）
-          sudo apt-get install -y \
-            libglib2.0-0 \
-            libsm6 \
-            libxext6 \
-            libxrender-dev \
-            libgomp1 \
-            libgstreamer1.0-0 \
-            libgstreamer-plugins-base1.0-0 \
-            libxcb-xinerama0 \
-            libfontconfig1-dev \
-            libfreetype6-dev
-          
-          # OpenCVの代替: libgl1-mesa-glxを避けてheadless版を使用
-          sudo apt-get install -y python3-opencv || echo "OpenCV system package skipped"
-      
-      - name: Install Python dependencies (Image Analysis Ready)
+      - name: Install dependencies (Lightweight)
         run: |
           pip install --upgrade pip
-          
-          # 基本依存関係
-          pip install pandas requests requests-cache beautifulsoup4 tqdm python-dotenv
-          
-          # 画像分析依存関係（GitHub Actions対応版）
-          pip install Pillow>=9.0.0
-          pip install numpy>=1.21.0
-          pip install matplotlib>=3.5.0
-          pip install scikit-learn>=1.1.0
-          pip install scipy>=1.8.0
-          
-          # OpenCV headless版（GUI依存なし）
-          pip install opencv-python-headless>=4.7.0
-          
-          # 色彩分析
-          pip install colorthief>=0.2.1
-          pip install webcolors>=1.12
-          
-          # Google Drive連携（オプション）
-          pip install google-auth==2.23.4 google-auth-oauthlib==1.1.0 google-auth-httplib2==0.1.1 google-api-python-client==2.108.0
+          pip install -r requirements.txt
+          echo "✅ 軽量化依存関係インストール完了"
       
-      - name: Run ranking script with images
+      - name: Run TOP100 ranking data collection
         env:
           APP_ID: ${{ secrets.APP_ID }}
         run: |
-          if [ "${{ github.event.inputs.enable_images }}" = "true" ] || [ "${{ github.event_name }}" = "schedule" ]; then
-            echo "🎨 画像分析有効でランキング取得開始"
-            python rakuten_rank_step1.py --pages ${{ github.event.inputs.pages || '10' }} --with-images
-          else
-            echo "📊 通常モードでランキング取得開始"
-            python rakuten_rank_step1.py --pages ${{ github.event.inputs.pages || '10' }}
-          fi
+          echo "🦝 RASCAL TOP100 データ取得開始"
+          python rakuten_rank_top100.py
+          echo "✅ TOP100データ取得完了"
       
-      - name: Run image analysis (GitHub Actions optimized)
+      - name: Run comprehensive analysis
         run: |
-          echo "🎨 画像分析実行中..."
-          python rascal_image_analyzer_headless.py || echo "画像分析をスキップ（画像データなしまたはエラー）"
+          echo "🔍 RASCAL TOP100 包括分析実行中..."
+          python rascal_top100_analyzer.py
+          echo "✅ 包括分析完了"
       
-      - name: Organize files
+      - name: Organize data files
         run: |
+          # データディレクトリ作成
           mkdir -p data
-          mkdir -p data/images
+          mkdir -p data/changes
           
+          # 日本時間でタイムスタンプ取得
           DATE=$(TZ='Asia/Tokyo' date +%Y-%m-%d)
+          TIME=$(TZ='Asia/Tokyo' date +%H-%M)
           
-          echo "生成されたファイル確認:"
-          ls -la rank_base_*.csv image_analysis_*.json 2>/dev/null || echo "一部ファイルなし"
+          echo "📁 生成されたファイル確認:"
+          ls -la rank_base_*.csv *.json 2>/dev/null || echo "一部ファイルなし"
           
           # CSVファイル保存
-          if ls rank_base_*_with_images.csv 1> /dev/null 2>&1; then
-            cp rank_base_*_with_images.csv data/rank_base_${DATE}_with_images.csv
-            cp rank_base_*_with_images.csv data/rank_base_latest_with_images.csv
-            echo "✅ 画像付きCSVファイル保存"
-          elif ls rank_base_*.csv 1> /dev/null 2>&1; then
+          if ls rank_base_*.csv 1> /dev/null 2>&1; then
             cp rank_base_*.csv data/rank_base_${DATE}.csv
             cp rank_base_*.csv data/rank_base_latest.csv
-            echo "✅ 通常CSVファイル保存"
+            echo "✅ TOP100 CSVファイル保存完了"
+          else
+            echo "❌ CSVファイルが見つかりません"
+            exit 1
           fi
           
-          # 画像分析結果保存
-          if ls image_analysis_*.json 1> /dev/null 2>&1; then
-            cp image_analysis_*.json data/images/
-            echo "✅ 画像分析結果保存"
+          # 分析結果保存
+          if ls data/changes/top100_analysis_*.json 1> /dev/null 2>&1; then
+            echo "✅ 分析結果JSON保存済み"
+          elif ls top100_analysis_*.json 1> /dev/null 2>&1; then
+            cp top100_analysis_*.json data/changes/
+            echo "✅ 分析結果JSON保存完了"
           fi
       
-      - name: Analyze changes
+      - name: Validate data quality
         run: |
-          echo "🔍 ランキング変化分析中..."
-          python analyze_changes.py || echo "変化分析をスキップ（初回実行または比較データなし）"
+          echo "🔍 データ品質チェック中..."
+          python -c "
+          import pandas as pd
+          import os
+          
+          if os.path.exists('data/rank_base_latest.csv'):
+              df = pd.read_csv('data/rank_base_latest.csv')
+              print(f'✅ データ品質OK: {len(df)}件取得')
+              print(f'📊 価格範囲: ¥{df[\"itemPrice\"].min():,} - ¥{df[\"itemPrice\"].max():,}')
+              
+              # 30機能フラグの検証
+              feature_cols = [col for col in df.columns if col.startswith(('has_', 'is_', 'for_', 'appeal_'))]
+              print(f'🏷️ 機能フラグ: {len(feature_cols)}種類検出')
+              
+              if len(df) < 50:
+                  print('⚠️ 警告: データ件数が少なすぎます')
+                  exit(1)
+          else:
+              print('❌ データファイルが見つかりません')
+              exit(1)
+          "
       
       - name: Commit and push changes
         run: |
-          git config --local user.email "rascal@github.com"
-          git config --local user.name "RASCAL Bot"
+          git config --local user.email "rascal-top100@github.com"
+          git config --local user.name "RASCAL TOP100 Bot"
           git add data/
           
+          # 変更があるかチェック
           if git diff --staged --quiet; then
-            echo "変更なし"
+            echo "📝 変更なし - コミットをスキップ"
           else
-            if ls data/images/*.json 1> /dev/null 2>&1; then
-              git commit -m "🎨 Daily ranking update with image analysis $(TZ='Asia/Tokyo' date +%Y-%m-%d)"
-            else
-              git commit -m "📊 Daily ranking update $(TZ='Asia/Tokyo' date +%Y-%m-%d)"
-            fi
+            # コミットメッセージの生成
+            ITEMS_COUNT=$(python -c "
+            import pandas as pd
+            try:
+                df = pd.read_csv('data/rank_base_latest.csv')
+                print(len(df))
+            except:
+                print('?')
+            ")
+            
+            git commit -m "🦝 Daily TOP100 analysis: ${ITEMS_COUNT}件分析完了 $(TZ='Asia/Tokyo' date +%Y-%m-%d_%H:%M)"
             git push https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
-            echo "✅ データ更新完了"
+            echo "✅ データ更新・プッシュ完了"
           fi
+      
+      - name: Analysis summary
+        run: |
+          echo ""
+          echo "🦝============================================"
+          echo "🦝 RASCAL TOP100 軽量化版 実行完了"
+          echo "🦝============================================"
+          echo "📊 楽天スーツケースTOP100分析"
+          echo "🏷️ 30種類機能フラグ検出"
+          echo "💰 実売価格推定・商品名品質評価"
+          echo "📈 市場変化・キーワード重要度分析"
+          echo "🎯 画像分析なし（軽量化版）"
+          echo "⚡ 高速・安定・効率的"
+          echo "🦝============================================"
