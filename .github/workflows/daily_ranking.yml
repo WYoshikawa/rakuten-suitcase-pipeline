@@ -48,28 +48,30 @@ jobs:
           echo "🔍 分析機能は削除されました（データ取得のみ）"
           echo "✅ シンプル化完了"
       
-      - name: Organize data files
-        run: |
-          # データディレクトリ作成
-          mkdir -p data
-          mkdir -p data/changes
-          
-          # 日本時間でタイムスタンプ取得
-          DATE=$(TZ='Asia/Tokyo' date +%Y-%m-%d)
-          TIME=$(TZ='Asia/Tokyo' date +%H-%M)
-          
-          echo "📁 生成されたファイル確認:"
-          ls -la rank_base_*.csv *.json 2>/dev/null || echo "一部ファイルなし"
-          
-          # CSVファイル保存
-          if ls rank_base_*.csv 1> /dev/null 2>&1; then
-            cp rank_base_*.csv data/rank_base_${DATE}.csv
-            cp rank_base_*.csv data/rank_base_latest.csv
-            echo "✅ TOP100 CSVファイル保存完了"
-          else
-            echo "❌ CSVファイルが見つかりません"
-            exit 1
-          fi
+- name: Organize data files
+  run: |
+    echo "📁 デバッグ: 現在のディレクトリ内容"
+    ls -la
+    
+    echo "📁 デバッグ: 全CSVファイル検索"
+    find . -name "*.csv" -type f || echo "CSVファイルなし"
+    
+    echo "📁 デバッグ: rank_base_*パターン検索"
+    ls -la rank_base_*.csv 2>/dev/null || echo "rank_base_*.csvなし"
+    
+    mkdir -p data
+    DATE=$(TZ='Asia/Tokyo' date +%Y-%m-%d)
+    
+    # より柔軟なファイル検索
+    if ls *.csv 1> /dev/null 2>&1; then
+      echo "✅ CSVファイル発見、コピー開始"
+      cp *.csv data/rank_base_${DATE}.csv
+      cp *.csv data/rank_base_latest.csv
+      echo "✅ CSVファイル保存完了"
+    else
+      echo "❌ CSVファイルが全く見つかりません"
+      exit 1
+    fi
           
           # 分析結果保存（削除）
           echo "📊 データ取得のみ - 分析機能は削除済み"
