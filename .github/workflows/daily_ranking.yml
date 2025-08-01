@@ -35,13 +35,29 @@ jobs:
           pip install -r requirements.txt
           echo "✅ 軽量化依存関係インストール完了"
       
-      - name: Run TOP100 ranking data collection
+      - name: Run TOP100 ranking data collection (Debug)
         env:
           APP_ID: ${{ secrets.APP_ID }}
         run: |
           echo "🦝 RASCAL TOP100 データ取得開始"
-          python rakuten_rank_step1.py --pages 1
-          echo "✅ TOP100データ取得完了"
+          echo "📊 APP_ID設定確認: ${APP_ID:0:10}..."
+          echo "📁 実行前のファイル一覧:"
+          ls -la
+          
+          echo "🐍 Pythonスクリプト実行開始"
+          python rakuten_rank_step1.py --pages 1 || echo "Pythonスクリプトでエラー発生"
+          echo "🐍 Pythonスクリプト実行終了"
+          
+          echo "📁 実行後のファイル一覧:"
+          ls -la
+          
+          echo "📁 CSVファイル専用検索:"
+          find . -name "*.csv" -type f -exec ls -la {} \; || echo "CSVファイル見つからず"
+          
+          echo "📁 rank_base関連ファイル検索:"
+          find . -name "rank_base*" -type f -exec ls -la {} \; || echo "rank_baseファイル見つからず"
+          
+          echo "✅ データ取得ステップ完了"
       
       - name: Run comprehensive analysis
         run: |
