@@ -45,9 +45,8 @@ jobs:
       
       - name: Run comprehensive analysis
         run: |
-          echo "🔍 RASCAL TOP100 包括分析実行中..."
-          python rascal_top100_analyzer.py
-          echo "✅ 包括分析完了"
+          echo "🔍 分析機能は削除されました（データ取得のみ）"
+          echo "✅ シンプル化完了"
       
       - name: Organize data files
         run: |
@@ -72,13 +71,8 @@ jobs:
             exit 1
           fi
           
-          # 分析結果保存
-          if ls data/changes/top100_analysis_*.json 1> /dev/null 2>&1; then
-            echo "✅ 分析結果JSON保存済み"
-          elif ls top100_analysis_*.json 1> /dev/null 2>&1; then
-            cp top100_analysis_*.json data/changes/
-            echo "✅ 分析結果JSON保存完了"
-          fi
+          # 分析結果保存（削除）
+          echo "📊 データ取得のみ - 分析機能は削除済み"
       
       - name: Validate data quality
         run: |
@@ -124,7 +118,7 @@ jobs:
                 print('?')
             ")
             
-            git commit -m "🦝 Daily TOP100 analysis: ${ITEMS_COUNT}件分析完了 $(TZ='Asia/Tokyo' date +%Y-%m-%d_%H:%M)"
+            git commit -m "📊 Daily TOP100 data collection: ${ITEMS_COUNT}件取得完了 $(TZ='Asia/Tokyo' date +%Y-%m-%d_%H:%M)"
             git push https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
             echo "✅ データ更新・プッシュ完了"
           fi
@@ -133,12 +127,11 @@ jobs:
         run: |
           echo ""
           echo "🦝============================================"
-          echo "🦝 RASCAL TOP100 軽量化版 実行完了"
+          echo "🦝 RASCAL TOP100 データ取得版 実行完了"
           echo "🦝============================================"
-          echo "📊 楽天スーツケースTOP100分析"
+          echo "📊 楽天スーツケースTOP100データ取得"
           echo "🏷️ 30種類機能フラグ検出"
-          echo "💰 実売価格推定・商品名品質評価"
-          echo "📈 市場変化・キーワード重要度分析"
-          echo "🎯 画像分析なし（軽量化版）"
-          echo "⚡ 高速・安定・効率的"
+          echo "💾 CSVファイル保存"
+          echo "🎯 分析機能なし（データ取得特化）"
+          echo "⚡ 超高速・超安定"
           echo "🦝============================================"
